@@ -1,0 +1,16 @@
+attack:
+  epsilon: 0.03137  # 8/255
+  alpha: 0.00392    # 1/255
+  iterations: 20
+  random_init: true
+
+  lambda_perturb: 0.01
+  mu_pred: 10.0
+
+  exit_entropy_weights:
+    experiment_A: [1.0, 1.0, 1.0, 1.0, 1.0]
+    experiment_B: [2.0, 2.0, 1.0, 0.5, 0.5]
+    experiment_C: [0.5, 0.5, 1.0, 2.0, 2.0]
+  default_experiment: A
+
+  preserve_prediction: true

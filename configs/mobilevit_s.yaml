@@ -1,0 +1,11 @@
+model: mobilevit_s
+num_classes: 10
+input_size: 256
+
+thresholds:
+  exit1: 0.70
+  exit2: 0.80
+  exit3: 0.85
+  exit4: 0.88
+  exit5: 0.90
+  calibrate_from_val: true
