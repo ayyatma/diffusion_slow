@@ -141,7 +141,11 @@ def eval_clean(
     device = get_device(device_name)
     _, val_loader, test_loader = build_cifar10_loaders(config)
 
-    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    model = MobileViTSWithExits(
+        num_classes=config["num_classes"],
+        pretrained=False,
+        exit_head_config=config.get("exit_heads"),
+    ).to(device)
     weights_path = resolve_project_path(config["eval"]["checkpoint"])
     checkpoint_loaded = weights_path.exists()
     if weights_path.exists():

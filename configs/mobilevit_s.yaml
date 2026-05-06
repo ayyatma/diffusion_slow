@@ -18,6 +18,12 @@ thresholds:
   calibrate_from_val: true
   target_exit_rate: 0.20
 
+exit_heads:
+  lph_hidden_mult: 2
+  lph_dropout: 0.10
+  gah_hidden_dim: 256
+  gah_dropout: 0.10
+
 training:
   batch_size: 128
   num_workers: 4
@@ -38,9 +44,9 @@ training:
     weight_decay: 1.0e-4
     scheduler: CosineAnnealingLR
     t_max: 40
-    exit_loss_weights: [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    exit_loss_weights: [0.4, 0.5, 0.6, 0.8, 0.9, 1.0]
     input_checkpoint: models/mobilevit_s_cifar10_stage0.pt
-    checkpoint: models/mobilevit_s_cifar10_stage1.pt
+    checkpoint: models/mobilevit_s_cifar10_stage1_exp1.pt
 
   stage2:
     epochs: 30
@@ -50,10 +56,10 @@ training:
     scheduler: CosineAnnealingLR
     t_max: 30
     kd_temperature: 4.0
-    kd_alpha: 0.7
-    exit_loss_weights: [0.1, 0.2, 0.4, 0.6, 0.8]
-    input_checkpoint: models/mobilevit_s_cifar10_stage1.pt
-    checkpoint: models/mobilevit_s_cifar10_stage2.pt
+    kd_alpha: 0.5
+    exit_loss_weights: [1.0, 1.0, 0.8, 0.6, 0.4]
+    input_checkpoint: models/mobilevit_s_cifar10_stage1_exp1.pt
+    checkpoint: models/mobilevit_s_cifar10_stage2_exp1.pt
 
 eval:
-  checkpoint: models/mobilevit_s_cifar10_stage2.pt
+  checkpoint: models/mobilevit_s_cifar10_stage2_exp1.pt

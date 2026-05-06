@@ -31,7 +31,11 @@ def train_stage2(config_path="configs/mobilevit_s.yaml", device_name=None, max_b
     device = get_device(device_name)
     train_loader, _, _ = build_cifar10_loaders(config)
 
-    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    model = MobileViTSWithExits(
+        num_classes=config["num_classes"],
+        pretrained=False,
+        exit_head_config=config.get("exit_heads"),
+    ).to(device)
     input_checkpoint = resolve_project_path(stage_cfg["input_checkpoint"])
     model.load_state_dict(load_state_dict(input_checkpoint, device))
 
@@ -98,6 +102,7 @@ def train_stage2(config_path="configs/mobilevit_s.yaml", device_name=None, max_b
             "kd_temperature": kd_temp,
             "kd_alpha": kd_alpha,
             "exit_loss_weights": exit_weights,
+            "exit_heads": config.get("exit_heads"),
             "freeze_backbone": True,
         },
     )

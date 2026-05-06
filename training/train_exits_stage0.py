@@ -31,7 +31,11 @@ def train_stage0(
     device = get_device(device_name)
     train_loader, _, _ = build_cifar10_loaders(config)
 
-    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=pretrained).to(device)
+    model = MobileViTSWithExits(
+        num_classes=config["num_classes"],
+        pretrained=pretrained,
+        exit_head_config=config.get("exit_heads"),
+    ).to(device)
 
     optimizer = torch.optim.AdamW(
         model.parameters(),

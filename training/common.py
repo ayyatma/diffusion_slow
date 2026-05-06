@@ -42,6 +42,35 @@ def load_state_dict(path: str | Path, device: torch.device):
         return torch.load(path, map_location=device)
 
 
+def load_matching_state_dict(
+    model: torch.nn.Module,
+    path: str | Path,
+    device: torch.device,
+    exclude_prefixes: tuple[str, ...] = (),
+):
+    checkpoint_state = load_state_dict(path, device)
+    model_state = model.state_dict()
+    matched_state = {}
+    skipped = []
+
+    for key, value in checkpoint_state.items():
+        if key.startswith(exclude_prefixes):
+            skipped.append(key)
+            continue
+        if key in model_state and model_state[key].shape == value.shape:
+            matched_state[key] = value
+        else:
+            skipped.append(key)
+
+    missing, unexpected = model.load_state_dict(matched_state, strict=False)
+    return {
+        "loaded_keys": sorted(matched_state.keys()),
+        "skipped_keys": sorted(skipped),
+        "missing_keys": sorted(missing),
+        "unexpected_keys": sorted(unexpected),
+    }
+
+
 def metadata_path_for_checkpoint(path: str | Path) -> Path:
     path = Path(path)
     return path.with_suffix(path.suffix + ".json")

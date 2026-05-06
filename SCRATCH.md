@@ -52,9 +52,9 @@ Bounded smoke path:
 After full checkpoints finish:
 
 ```bash
-.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1.pt --max-batches 10 --output results/stage1_checkpoint_check.json
-.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage2.pt --max-batches 10 --output results/stage2_checkpoint_check.json
-.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2.json
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1_exp1.pt --max-batches 10 --output results/stage1_exp1_checkpoint_check.json
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage2_exp1.pt --max-batches 10 --output results/stage2_exp1_checkpoint_check.json
+.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2_exp1.json
 ```
 
 ## Training Strategy Questions

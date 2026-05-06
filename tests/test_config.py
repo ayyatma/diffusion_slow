@@ -17,9 +17,18 @@ def test_mobilevit_config_has_phase1_thresholds():
     assert thresholds["calibrate_from_val"] is True
     assert thresholds["target_exit_rate"] == 0.20
 
+    exit_heads = config["exit_heads"]
+    assert exit_heads["lph_hidden_mult"] == 2
+    assert exit_heads["gah_hidden_dim"] == 256
+
     training = config["training"]
     assert training["batch_size"] == 128
     assert len(training["stage1"]["exit_loss_weights"]) == 6
     assert len(training["stage2"]["exit_loss_weights"]) == 5
-    assert training["stage1"]["checkpoint"].endswith("_stage1.pt")
-    assert training["stage2"]["checkpoint"].endswith("_stage2.pt")
+    assert training["stage1"]["exit_loss_weights"] == [0.4, 0.5, 0.6, 0.8, 0.9, 1.0]
+    assert training["stage2"]["exit_loss_weights"] == [1.0, 1.0, 0.8, 0.6, 0.4]
+    assert training["stage2"]["kd_alpha"] == 0.5
+    assert training["stage1"]["checkpoint"].endswith("_stage1_exp1.pt")
+    assert training["stage2"]["input_checkpoint"].endswith("_stage1_exp1.pt")
+    assert training["stage2"]["checkpoint"].endswith("_stage2_exp1.pt")
+    assert config["eval"]["checkpoint"].endswith("_stage2_exp1.pt")

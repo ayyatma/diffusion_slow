@@ -50,11 +50,11 @@ models/mobilevit_s_cifar10_stage1.pt.json
 After a checkpoint finishes, run a bounded sanity check:
 
 ```bash
-.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1.pt --max-batches 10 --output results/stage1_checkpoint_check.json
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1_exp1.pt --max-batches 10 --output results/stage1_exp1_checkpoint_check.json
 ```
 
 Clean eval writes structured results by default:
 
 ```bash
-.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2.json
+.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2_exp1.json
 ```

@@ -30,7 +30,11 @@ def check_checkpoint(
     device = get_device(device_name)
     checkpoint_path = resolve_project_path(checkpoint)
 
-    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    model = MobileViTSWithExits(
+        num_classes=config["num_classes"],
+        pretrained=False,
+        exit_head_config=config.get("exit_heads"),
+    ).to(device)
     state = load_state_dict(checkpoint_path, device)
     load_result = model.load_state_dict(state, strict=True)
 
