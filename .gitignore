@@ -24,13 +24,21 @@ datasets/
 
 # Model checkpoints and weights
 *.pt
+*.pt.json
 *.pth
+*.pth.json
 *.ckpt
+*.ckpt.json
 *.safetensors
+*.safetensors.json
 models/*.pt
+models/*.pt.json
 models/*.pth
+models/*.pth.json
 models/*.ckpt
+models/*.ckpt.json
 models/*.safetensors
+models/*.safetensors.json
 
 # Experiment outputs
 results/
