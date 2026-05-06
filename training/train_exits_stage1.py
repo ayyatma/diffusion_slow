@@ -1,55 +1,66 @@
 import torch
 import torch.nn as nn
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+
 from models.mobilevit_s_exits import MobileViTSWithExits
+from training.common import (
+    add_common_args,
+    build_cifar10_loaders,
+    get_device,
+    limited_batches,
+    load_config,
+    resolve_project_path,
+)
 
-def train_stage1():
-    # Joint exit supervision
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(256, padding=16),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=4)
-    
-    model = MobileViTSWithExits(num_classes=10, pretrained=False).to(device)
-    model.load_state_dict(torch.load("models/mobilevit_s_cifar10_stage0.pt"))
-    
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=40)
+
+def train_stage1(config_path="configs/mobilevit_s.yaml", device_name=None, max_batches=None):
+    config = load_config(config_path)
+    stage_cfg = config["training"]["stage1"]
+    device = get_device(device_name)
+    train_loader, _, _ = build_cifar10_loaders(config)
+
+    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    input_checkpoint = resolve_project_path(stage_cfg["input_checkpoint"])
+    model.load_state_dict(torch.load(input_checkpoint, map_location=device))
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=stage_cfg["lr"],
+        weight_decay=stage_cfg["weight_decay"],
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=stage_cfg["t_max"])
     criterion = nn.CrossEntropyLoss()
-    
-    # 6 outputs: 5 early exits + 1 final exit
-    exit_weights = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    exit_weights = stage_cfg["exit_loss_weights"]
 
-    for epoch in range(40):
+    for epoch in range(stage_cfg["epochs"]):
         model.train()
         total_loss = 0
-        for X, y in train_loader:
+        steps = 0
+        for X, y in limited_batches(train_loader, max_batches):
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
             logits = model(X)
-            
+
             loss = 0
             for w, out in zip(exit_weights, logits):
                 loss += w * criterion(out, y)
-                
+
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            
-        scheduler.step()
-        print(f"Epoch {epoch+1}/40, Loss: {total_loss/len(train_loader):.4f}")
+            steps += 1
 
-    torch.save(model.state_dict(), "models/mobilevit_s_cifar10_stage1.pt")
+        scheduler.step()
+        print(f"Epoch {epoch+1}/{stage_cfg['epochs']}, Loss: {total_loss/max(steps, 1):.4f}")
+
+    checkpoint = resolve_project_path(stage_cfg["checkpoint"])
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), checkpoint)
     print("Stage 1 complete. Weights saved.")
+    return model
 
 if __name__ == "__main__":
-    train_stage1()
+    import argparse
+
+    parser = add_common_args(argparse.ArgumentParser())
+    args = parser.parse_args()
+    train_stage1(args.config, args.device, args.max_batches)

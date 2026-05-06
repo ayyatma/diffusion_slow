@@ -2,6 +2,13 @@ model: mobilevit_s
 num_classes: 10
 input_size: 256
 
+dataset:
+  name: CIFAR10
+  root: data
+  download: true
+  val_size: 5000
+  split_seed: 0
+
 thresholds:
   exit1: 0.70
   exit2: 0.80
@@ -9,3 +16,44 @@ thresholds:
   exit4: 0.88
   exit5: 0.90
   calibrate_from_val: true
+  target_exit_rate: 0.20
+
+training:
+  batch_size: 128
+  num_workers: 4
+
+  stage0:
+    epochs: 10
+    optimizer: AdamW
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    scheduler: CosineAnnealingLR
+    t_max: 10
+    checkpoint: models/mobilevit_s_cifar10_stage0.pt
+
+  stage1:
+    epochs: 40
+    optimizer: AdamW
+    lr: 5.0e-5
+    weight_decay: 1.0e-4
+    scheduler: CosineAnnealingLR
+    t_max: 40
+    exit_loss_weights: [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    input_checkpoint: models/mobilevit_s_cifar10_stage0.pt
+    checkpoint: models/mobilevit_s_cifar10_stage1.pt
+
+  stage2:
+    epochs: 30
+    optimizer: AdamW
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+    scheduler: CosineAnnealingLR
+    t_max: 30
+    kd_temperature: 4.0
+    kd_alpha: 0.7
+    exit_loss_weights: [0.1, 0.2, 0.4, 0.6, 0.8]
+    input_checkpoint: models/mobilevit_s_cifar10_stage1.pt
+    checkpoint: models/mobilevit_s_cifar10_stage2.pt
+
+eval:
+  checkpoint: models/mobilevit_s_cifar10_stage2.pt

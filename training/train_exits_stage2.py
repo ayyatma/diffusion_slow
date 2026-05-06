@@ -1,58 +1,58 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+
 from models.mobilevit_s_exits import MobileViTSWithExits
+from training.common import (
+    add_common_args,
+    build_cifar10_loaders,
+    get_device,
+    limited_batches,
+    load_config,
+    resolve_project_path,
+)
 
 def kd_loss(student_logits, teacher_logits, temperature):
     soft_targets = F.softmax(teacher_logits / temperature, dim=-1)
     soft_prob = F.log_softmax(student_logits / temperature, dim=-1)
     return F.kl_div(soft_prob, soft_targets, reduction='batchmean') * (temperature ** 2)
 
-def train_stage2():
-    # Exit distillation with frozen backbone
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(256, padding=16),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=4)
-    
-    model = MobileViTSWithExits(num_classes=10, pretrained=False).to(device)
-    model.load_state_dict(torch.load("models/mobilevit_s_cifar10_stage1.pt"))
-    
+def train_stage2(config_path="configs/mobilevit_s.yaml", device_name=None, max_batches=None):
+    config = load_config(config_path)
+    stage_cfg = config["training"]["stage2"]
+    device = get_device(device_name)
+    train_loader, _, _ = build_cifar10_loaders(config)
+
+    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    input_checkpoint = resolve_project_path(stage_cfg["input_checkpoint"])
+    model.load_state_dict(torch.load(input_checkpoint, map_location=device))
+
     # Freeze backbone
     for param in model.backbone.parameters():
         param.requires_grad = False
-    if hasattr(model, 'feature_extractor'):
-        for param in model.feature_extractor.parameters():
-            param.requires_grad = False
-            
-    optimizer = torch.optim.AdamW(model.exits.parameters(), lr=1e-3, weight_decay=1e-4) # Train exits only
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30)
-    criterion_ce = nn.CrossEntropyLoss()
-    
-    kd_temp = 4.0
-    kd_alpha = 0.7
-    exit_weights = [0.1, 0.2, 0.4, 0.6, 0.8]  # Weights for 5 exits (final exit is teacher)
 
-    for epoch in range(30):
+    optimizer = torch.optim.AdamW(
+        model.exits.parameters(),
+        lr=stage_cfg["lr"],
+        weight_decay=stage_cfg["weight_decay"],
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=stage_cfg["t_max"])
+    criterion_ce = nn.CrossEntropyLoss()
+    kd_temp = stage_cfg["kd_temperature"]
+    kd_alpha = stage_cfg["kd_alpha"]
+    exit_weights = stage_cfg["exit_loss_weights"]
+
+    for epoch in range(stage_cfg["epochs"]):
         model.train()
         total_loss = 0
-        for X, y in train_loader:
+        steps = 0
+        for X, y in limited_batches(train_loader, max_batches):
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
             logits = model(X)
-            
+
             teacher_logits = logits[-1].detach()
-            
+
             loss = 0
             for i in range(5):
                 out = logits[i]
@@ -60,16 +60,24 @@ def train_stage2():
                 loss_kd = kd_loss(out, teacher_logits, kd_temp)
                 combined = kd_alpha * loss_kd + (1 - kd_alpha) * loss_ce
                 loss += exit_weights[i] * combined
-                
+
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            
-        scheduler.step()
-        print(f"Epoch {epoch+1}/30, Loss: {total_loss/len(train_loader):.4f}")
+            steps += 1
 
-    torch.save(model.state_dict(), "models/mobilevit_s_cifar10_stage2.pt")
+        scheduler.step()
+        print(f"Epoch {epoch+1}/{stage_cfg['epochs']}, Loss: {total_loss/max(steps, 1):.4f}")
+
+    checkpoint = resolve_project_path(stage_cfg["checkpoint"])
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), checkpoint)
     print("Stage 2 complete. Weights saved.")
+    return model
 
 if __name__ == "__main__":
-    train_stage2()
+    import argparse
+
+    parser = add_common_args(argparse.ArgumentParser())
+    args = parser.parse_args()
+    train_stage2(args.config, args.device, args.max_batches)

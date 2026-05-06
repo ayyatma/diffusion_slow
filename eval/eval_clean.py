@@ -1,81 +1,107 @@
 import torch
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
-from models.mobilevit_s_exits import MobileViTSWithExits
-from attacks.utils.entropy import max_confidence
-import yaml
-import os
 
-def calibrate_thresholds(model, val_loader, device, target_exit_rate=0.20):
+from models.mobilevit_s_exits import MobileViTSWithExits
+from attacks.utils.entropy import exit_decision, max_confidence
+from training.common import (
+    add_common_args,
+    build_cifar10_loaders,
+    get_device,
+    limited_batches,
+    load_config,
+    resolve_project_path,
+)
+
+
+def calibrate_thresholds(model, val_loader, device, target_exit_rate=0.20, max_batches=None):
     model.eval()
-    all_max_probs = [[] for _ in range(5)]
-    
+    remaining_confidences = [[] for _ in range(5)]
+    thresholds = []
+
     with torch.no_grad():
-        for X, _ in val_loader:
+        all_exit_logits = [[] for _ in range(5)]
+        for X, _ in limited_batches(val_loader, max_batches):
             X = X.to(device)
             logits = model(X)
             for i in range(5):
-                probs = max_confidence(logits[i])
-                all_max_probs[i].extend(probs.cpu().tolist())
+                all_exit_logits[i].append(logits[i].cpu())
 
-    thresholds = []
-    # Simplified percentiles for demonstration
+    if not all_exit_logits[0]:
+        raise ValueError("Cannot calibrate thresholds from an empty validation loader")
+
+    all_exit_logits = [torch.cat(exit_logits, dim=0) for exit_logits in all_exit_logits]
+    active_mask = torch.ones(all_exit_logits[0].shape[0], dtype=torch.bool)
+
     for i in range(5):
-        probs = torch.tensor(all_max_probs[i])
-        # Find threshold where approx target_exit_rate % bounds the exiting.
-        # This is a simplified version; ideally we do this sequentially removing early exited.
+        active_logits = all_exit_logits[i][active_mask]
+        if active_logits.numel() == 0:
+            thresholds.append(0.99)
+            continue
+
+        probs = max_confidence(active_logits)
+        remaining_confidences[i].extend(probs.tolist())
         t = torch.quantile(probs, 1.0 - target_exit_rate).item()
+        t = float(min(max(t, 0.5), 0.99))
         thresholds.append(t)
-        
+
+        should_exit = exit_decision(all_exit_logits[i], t)
+        active_mask = active_mask & ~should_exit
+
     return thresholds
 
-def eval_clean():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(256),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False)
-    
-    model = MobileViTSWithExits(num_classes=10, pretrained=False).to(device)
-    weights_path = "models/mobilevit_s_cifar10_stage2.pt"
-    if os.path.exists(weights_path):
-        model.load_state_dict(torch.load(weights_path, map_location=device))
-    else:
-        print("Warning: Weights not found, using initialized weights!")
-        
+
+def evaluate_accuracy(model, data_loader, device, max_batches=None):
     model.eval()
-    corrects = [0]*6
+    corrects = [0] * 6
     total = 0
-    
+
     with torch.no_grad():
-        for X, y in val_loader:
+        for X, y in limited_batches(data_loader, max_batches):
             X, y = X.to(device), y.to(device)
             logits = model(X)
             total += y.size(0)
-            
+
             for i in range(6):
                 preds = logits[i].argmax(dim=1)
                 corrects[i] += (preds == y).sum().item()
-                
+
+    if total == 0:
+        raise ValueError("Cannot evaluate accuracy from an empty data loader")
+
+    return [correct / total for correct in corrects]
+
+
+def eval_clean(config_path="configs/mobilevit_s.yaml", device_name=None, max_batches=None):
+    config = load_config(config_path)
+    device = get_device(device_name)
+    _, val_loader, test_loader = build_cifar10_loaders(config)
+
+    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
+    weights_path = resolve_project_path(config["eval"]["checkpoint"])
+    if weights_path.exists():
+        model.load_state_dict(torch.load(weights_path, map_location=device))
+    else:
+        print(f"Warning: weights not found at {weights_path}; using initialized weights.")
+
+    accuracies = evaluate_accuracy(model, test_loader, device, max_batches=max_batches)
     for i in range(5):
-        print(f"Exit {i+1} Accuracy: {corrects[i]/total * 100:.2f}%")
-    print(f"Final Exit Accuracy: {corrects[5]/total * 100:.2f}%")
-    
-    # Calibration
-    with open("configs/mobilevit_s.yaml", 'r') as f:
-        config = yaml.safe_load(f)
-        
-    if config['thresholds']['calibrate_from_val']:
-        thresh = calibrate_thresholds(model, val_loader, device)
-        print("Calibrated thresholds:", thresh)
+        print(f"Exit {i+1} Accuracy: {accuracies[i] * 100:.2f}%")
+    print(f"Final Exit Accuracy: {accuracies[5] * 100:.2f}%")
+
+    if config["thresholds"]["calibrate_from_val"]:
+        thresholds = calibrate_thresholds(
+            model,
+            val_loader,
+            device,
+            target_exit_rate=config["thresholds"].get("target_exit_rate", 0.20),
+            max_batches=max_batches,
+        )
+        print("Calibrated thresholds:", thresholds)
     else:
         print("Using thresholds from config")
 
 if __name__ == "__main__":
-    eval_clean()
+    import argparse
+
+    parser = add_common_args(argparse.ArgumentParser())
+    args = parser.parse_args()
+    eval_clean(args.config, args.device, args.max_batches)
