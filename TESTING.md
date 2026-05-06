@@ -29,10 +29,10 @@ Full Stage 0/1/2 training should only run after these gates pass.
 The stage scripts support `--max-batches` so agents can exercise the real training path without launching a full run:
 
 ```bash
-.venv/bin/python training/train_exits_stage0.py --max-batches 2
-.venv/bin/python training/train_exits_stage1.py --max-batches 2
-.venv/bin/python training/train_exits_stage2.py --max-batches 2
+.venv/bin/python training/train_exits_stage0.py --epochs 1 --max-batches 2 --no-pretrained
+.venv/bin/python training/train_exits_stage1.py --epochs 1 --max-batches 2
+.venv/bin/python training/train_exits_stage2.py --epochs 1 --max-batches 2
 .venv/bin/python eval/eval_clean.py --max-batches 2
 ```
 
-Stage 1 requires the Stage 0 checkpoint, and Stage 2 requires the Stage 1 checkpoint. Full Stage 0/1/2 training should only run after the pytest harness passes.
+Stage 1 requires the Stage 0 checkpoint, and Stage 2 requires the Stage 1 checkpoint. The `--no-pretrained` flag is only for smoke tests that validate wiring without downloading ImageNet weights; real Stage 0 should use the default pretrained backbone. Full Stage 0/1/2 training should only run after the pytest harness passes.

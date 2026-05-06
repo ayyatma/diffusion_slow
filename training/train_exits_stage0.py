@@ -1,5 +1,11 @@
 import torch
 import torch.nn as nn
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.mobilevit_s_exits import MobileViTSWithExits
 from training.common import (
@@ -12,13 +18,19 @@ from training.common import (
 )
 
 
-def train_stage0(config_path="configs/mobilevit_s.yaml", device_name=None, max_batches=None):
+def train_stage0(
+    config_path="configs/mobilevit_s.yaml",
+    device_name=None,
+    max_batches=None,
+    epochs=None,
+    pretrained=True,
+):
     config = load_config(config_path)
     stage_cfg = config["training"]["stage0"]
     device = get_device(device_name)
     train_loader, _, _ = build_cifar10_loaders(config)
 
-    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=True).to(device)
+    model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=pretrained).to(device)
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -28,7 +40,8 @@ def train_stage0(config_path="configs/mobilevit_s.yaml", device_name=None, max_b
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=stage_cfg["t_max"])
     criterion = nn.CrossEntropyLoss()
 
-    for epoch in range(stage_cfg["epochs"]):
+    num_epochs = epochs or stage_cfg["epochs"]
+    for epoch in range(num_epochs):
         model.train()
         total_loss = 0
         steps = 0
@@ -44,7 +57,7 @@ def train_stage0(config_path="configs/mobilevit_s.yaml", device_name=None, max_b
             steps += 1
 
         scheduler.step()
-        print(f"Epoch {epoch+1}/{stage_cfg['epochs']}, Loss: {total_loss/max(steps, 1):.4f}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/max(steps, 1):.4f}", flush=True)
 
     checkpoint = resolve_project_path(stage_cfg["checkpoint"])
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -56,5 +69,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = add_common_args(argparse.ArgumentParser())
+    parser.add_argument("--no-pretrained", action="store_true")
     args = parser.parse_args()
-    train_stage0(args.config, args.device, args.max_batches)
+    train_stage0(
+        args.config,
+        args.device,
+        args.max_batches,
+        args.epochs,
+        pretrained=not args.no_pretrained,
+    )

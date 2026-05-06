@@ -40,3 +40,16 @@ def test_mobilevit_feature_channels_match_exit_heads(input_size):
             raise AssertionError(f"unknown exit head type: {type(exit_head).__name__}")
 
     assert feature_channels == exit_channels
+
+
+@pytest.mark.slow
+def test_mobilevit_final_output_matches_backbone_forward(device, input_size):
+    model = MobileViTSWithExits(num_classes=10, pretrained=False).to(device)
+    model.eval()
+    x = torch.randn(2, 3, input_size, input_size, device=device)
+
+    with torch.no_grad():
+        all_logits = model(x)
+        backbone_logits = model.backbone(x)
+
+    assert torch.allclose(all_logits[-1], backbone_logits, atol=1e-6)

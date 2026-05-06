@@ -8,3 +8,23 @@ def test_training_and_eval_entrypoints_import():
     assert callable(train_stage0)
     assert callable(train_stage1)
     assert callable(train_stage2)
+
+
+def test_direct_script_help_entrypoints_work():
+    import subprocess
+    import sys
+
+    scripts = [
+        "training/train_exits_stage0.py",
+        "training/train_exits_stage1.py",
+        "training/train_exits_stage2.py",
+        "eval/eval_clean.py",
+    ]
+    for script in scripts:
+        result = subprocess.run(
+            [sys.executable, script, "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr

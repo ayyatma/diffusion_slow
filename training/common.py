@@ -32,6 +32,13 @@ def get_device(name: str | None = None) -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def load_state_dict(path: str | Path, device: torch.device):
+    try:
+        return torch.load(path, map_location=device, weights_only=True)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 def build_train_transform(input_size: int):
     return transforms.Compose([
         transforms.Resize(input_size),
@@ -124,4 +131,5 @@ def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
     parser.add_argument("--device", default=None)
     parser.add_argument("--max-batches", type=int, default=None)
+    parser.add_argument("--epochs", type=int, default=None)
     return parser

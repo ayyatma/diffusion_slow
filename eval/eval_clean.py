@@ -1,4 +1,10 @@
 import torch
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.mobilevit_s_exits import MobileViTSWithExits
 from attacks.utils.entropy import exit_decision, max_confidence
@@ -8,6 +14,7 @@ from training.common import (
     get_device,
     limited_batches,
     load_config,
+    load_state_dict,
     resolve_project_path,
 )
 
@@ -78,7 +85,7 @@ def eval_clean(config_path="configs/mobilevit_s.yaml", device_name=None, max_bat
     model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
     weights_path = resolve_project_path(config["eval"]["checkpoint"])
     if weights_path.exists():
-        model.load_state_dict(torch.load(weights_path, map_location=device))
+        model.load_state_dict(load_state_dict(weights_path, device))
     else:
         print(f"Warning: weights not found at {weights_path}; using initialized weights.")
 
