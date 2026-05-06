@@ -1,6 +1,6 @@
 import torch
 
-from eval.eval_clean import calibrate_thresholds, evaluate_accuracy
+from eval.eval_clean import calibrate_thresholds, evaluate_accuracy, evaluate_clean_metrics
 from attacks.utils.entropy import max_confidence
 
 
@@ -64,3 +64,23 @@ def test_evaluate_accuracy_returns_six_outputs():
     accuracies = evaluate_accuracy(model, _loader(), torch.device("cpu"))
 
     assert accuracies == [1.0] * 6
+
+
+def test_evaluate_clean_metrics_reports_confidence_and_entropy():
+    outputs = []
+    for _ in range(6):
+        logits = torch.zeros(4, 10)
+        logits[torch.arange(4), torch.arange(4)] = 5.0
+        logits[3] = 0.0
+        outputs.append(logits)
+    model = FixedLogitModel(outputs)
+
+    metrics = evaluate_clean_metrics(model, _loader(), torch.device("cpu"))
+
+    assert metrics["total"] == 4
+    assert metrics["accuracies"] == [0.75] * 6
+    final_diag = metrics["diagnostics"]["final"]
+    assert final_diag["confidence"]["mean"] > 0.7
+    assert final_diag["confidence_correct"]["mean"] > 0.9
+    assert final_diag["confidence_wrong"]["mean"] < 0.2
+    assert 0 <= final_diag["entropy_normalized"]["mean"] <= 1
