@@ -15,6 +15,7 @@ The harness is intentionally cheap. It should run before full CIFAR training and
 2. Model contract tests: MobileViT-S returns five exit logits plus one final classifier output.
 3. Gradient-flow test: joint exit loss backpropagates through every trainable parameter.
 4. Stage-loss test: distillation KL loss is finite and backpropagates.
+5. Artifact check: checkpoint strict-load plus bounded per-output accuracy via `eval/check_checkpoint.py`.
 
 Full Stage 0/1/2 training should only run after these gates pass.
 
@@ -36,3 +37,24 @@ The stage scripts support `--max-batches` so agents can exercise the real traini
 ```
 
 Stage 1 requires the Stage 0 checkpoint, and Stage 2 requires the Stage 1 checkpoint. The `--no-pretrained` flag is only for smoke tests that validate wiring without downloading ImageNet weights; real Stage 0 should use the default pretrained backbone. Full Stage 0/1/2 training should only run after the pytest harness passes.
+
+## Artifact Checks
+
+Training scripts save a checkpoint and a JSON sidecar next to it, for example:
+
+```text
+models/mobilevit_s_cifar10_stage1.pt
+models/mobilevit_s_cifar10_stage1.pt.json
+```
+
+After a checkpoint finishes, run a bounded sanity check:
+
+```bash
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1.pt --max-batches 10 --output results/stage1_checkpoint_check.json
+```
+
+Clean eval writes structured results by default:
+
+```bash
+.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2.json
+```

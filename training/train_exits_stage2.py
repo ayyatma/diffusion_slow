@@ -17,6 +17,7 @@ from training.common import (
     load_state_dict,
     progress_batches,
     resolve_project_path,
+    save_checkpoint_with_metadata,
 )
 
 def kd_loss(student_logits, teacher_logits, temperature):
@@ -79,10 +80,29 @@ def train_stage2(config_path="configs/mobilevit_s.yaml", device_name=None, max_b
         scheduler.step()
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/max(steps, 1):.4f}", flush=True)
 
-    checkpoint = resolve_project_path(stage_cfg["checkpoint"])
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), checkpoint)
-    print("Stage 2 complete. Weights saved.")
+    checkpoint, metadata_path = save_checkpoint_with_metadata(
+        model,
+        stage_cfg["checkpoint"],
+        {
+            "stage": "stage2",
+            "config": str(resolve_project_path(config_path)),
+            "epochs": num_epochs,
+            "max_batches": max_batches,
+            "input_checkpoint": str(input_checkpoint),
+            "final_train_loss": total_loss / max(steps, 1),
+            "optimizer": stage_cfg["optimizer"],
+            "lr": stage_cfg["lr"],
+            "weight_decay": stage_cfg["weight_decay"],
+            "scheduler": stage_cfg["scheduler"],
+            "t_max": stage_cfg["t_max"],
+            "kd_temperature": kd_temp,
+            "kd_alpha": kd_alpha,
+            "exit_loss_weights": exit_weights,
+            "freeze_backbone": True,
+        },
+    )
+    print(f"Stage 2 complete. Weights saved to {checkpoint}.")
+    print(f"Stage 2 metadata saved to {metadata_path}.")
     return model
 
 if __name__ == "__main__":

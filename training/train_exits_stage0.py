@@ -15,6 +15,7 @@ from training.common import (
     load_config,
     progress_batches,
     resolve_project_path,
+    save_checkpoint_with_metadata,
 )
 
 
@@ -61,10 +62,25 @@ def train_stage0(
         scheduler.step()
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/max(steps, 1):.4f}", flush=True)
 
-    checkpoint = resolve_project_path(stage_cfg["checkpoint"])
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), checkpoint)
-    print("Stage 0 complete. Weights saved.")
+    checkpoint, metadata_path = save_checkpoint_with_metadata(
+        model,
+        stage_cfg["checkpoint"],
+        {
+            "stage": "stage0",
+            "config": str(resolve_project_path(config_path)),
+            "epochs": num_epochs,
+            "max_batches": max_batches,
+            "pretrained": pretrained,
+            "final_train_loss": total_loss / max(steps, 1),
+            "optimizer": stage_cfg["optimizer"],
+            "lr": stage_cfg["lr"],
+            "weight_decay": stage_cfg["weight_decay"],
+            "scheduler": stage_cfg["scheduler"],
+            "t_max": stage_cfg["t_max"],
+        },
+    )
+    print(f"Stage 0 complete. Weights saved to {checkpoint}.")
+    print(f"Stage 0 metadata saved to {metadata_path}.")
     return model
 
 if __name__ == "__main__":

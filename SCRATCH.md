@@ -49,6 +49,14 @@ Bounded smoke path:
 
 `--no-pretrained` is only for wiring smoke tests. Real Stage 0 should use pretrained weights.
 
+After full checkpoints finish:
+
+```bash
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage1.pt --max-batches 10 --output results/stage1_checkpoint_check.json
+.venv/bin/python eval/check_checkpoint.py models/mobilevit_s_cifar10_stage2.pt --max-batches 10 --output results/stage2_checkpoint_check.json
+.venv/bin/python eval/eval_clean.py --output results/clean_eval_stage2.json
+```
+
 ## Training Strategy Questions
 
 The current design uses:

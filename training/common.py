@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Iterable
+from datetime import datetime, timezone
 
 import torch
 import yaml
@@ -38,6 +40,39 @@ def load_state_dict(path: str | Path, device: torch.device):
         return torch.load(path, map_location=device, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=device)
+
+
+def metadata_path_for_checkpoint(path: str | Path) -> Path:
+    path = Path(path)
+    return path.with_suffix(path.suffix + ".json")
+
+
+def write_json(path: str | Path, payload: dict) -> Path:
+    path = resolve_project_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+        f.write("\n")
+    return path
+
+
+def save_checkpoint_with_metadata(
+    model: torch.nn.Module,
+    checkpoint_path: str | Path,
+    metadata: dict,
+) -> tuple[Path, Path]:
+    checkpoint_path = resolve_project_path(checkpoint_path)
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), checkpoint_path)
+
+    metadata_payload = {
+        **metadata,
+        "checkpoint": str(checkpoint_path.relative_to(PROJECT_ROOT)),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    metadata_path = metadata_path_for_checkpoint(checkpoint_path)
+    write_json(metadata_path, metadata_payload)
+    return checkpoint_path, metadata_path
 
 
 def build_train_transform(input_size: int):

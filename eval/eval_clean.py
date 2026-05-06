@@ -17,6 +17,7 @@ from training.common import (
     load_state_dict,
     progress_batches,
     resolve_project_path,
+    write_json,
 )
 
 
@@ -81,13 +82,19 @@ def evaluate_accuracy(model, data_loader, device, max_batches=None):
     return [correct / total for correct in corrects]
 
 
-def eval_clean(config_path="configs/mobilevit_s.yaml", device_name=None, max_batches=None):
+def eval_clean(
+    config_path="configs/mobilevit_s.yaml",
+    device_name=None,
+    max_batches=None,
+    output_path="results/clean_eval.json",
+):
     config = load_config(config_path)
     device = get_device(device_name)
     _, val_loader, test_loader = build_cifar10_loaders(config)
 
     model = MobileViTSWithExits(num_classes=config["num_classes"], pretrained=False).to(device)
     weights_path = resolve_project_path(config["eval"]["checkpoint"])
+    checkpoint_loaded = weights_path.exists()
     if weights_path.exists():
         model.load_state_dict(load_state_dict(weights_path, device))
     else:
@@ -98,6 +105,7 @@ def eval_clean(config_path="configs/mobilevit_s.yaml", device_name=None, max_bat
         print(f"Exit {i+1} Accuracy: {accuracies[i] * 100:.2f}%")
     print(f"Final Exit Accuracy: {accuracies[5] * 100:.2f}%")
 
+    thresholds = None
     if config["thresholds"]["calibrate_from_val"]:
         thresholds = calibrate_thresholds(
             model,
@@ -110,9 +118,31 @@ def eval_clean(config_path="configs/mobilevit_s.yaml", device_name=None, max_bat
     else:
         print("Using thresholds from config")
 
+    result = {
+        "config": str(resolve_project_path(config_path)),
+        "checkpoint": str(weights_path),
+        "checkpoint_loaded": checkpoint_loaded,
+        "device": str(device),
+        "max_batches": max_batches,
+        "accuracies": {
+            **{f"exit{i+1}": accuracies[i] for i in range(5)},
+            "final": accuracies[5],
+        },
+        "accuracies_percent": {
+            **{f"exit{i+1}": accuracies[i] * 100 for i in range(5)},
+            "final": accuracies[5] * 100,
+        },
+        "thresholds": thresholds,
+    }
+    if output_path:
+        saved_path = write_json(output_path, result)
+        print(f"Clean eval results saved to {saved_path}.")
+    return result
+
 if __name__ == "__main__":
     import argparse
 
     parser = add_common_args(argparse.ArgumentParser())
+    parser.add_argument("--output", default="results/clean_eval.json")
     args = parser.parse_args()
-    eval_clean(args.config, args.device, args.max_batches)
+    eval_clean(args.config, args.device, args.max_batches, args.output)
