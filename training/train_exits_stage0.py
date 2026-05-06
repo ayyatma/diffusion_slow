@@ -12,8 +12,8 @@ from training.common import (
     add_common_args,
     build_cifar10_loaders,
     get_device,
-    limited_batches,
     load_config,
+    progress_batches,
     resolve_project_path,
 )
 
@@ -45,7 +45,8 @@ def train_stage0(
         model.train()
         total_loss = 0
         steps = 0
-        for X, y in limited_batches(train_loader, max_batches):
+        batches = progress_batches(train_loader, max_batches, desc=f"Stage 0 epoch {epoch+1}/{num_epochs}")
+        for X, y in batches:
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
             logits = model(X)
@@ -55,6 +56,7 @@ def train_stage0(
             optimizer.step()
             total_loss += loss.item()
             steps += 1
+            batches.set_postfix(loss=f"{total_loss/steps:.4f}", lr=f"{scheduler.get_last_lr()[0]:.2e}")
 
         scheduler.step()
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/max(steps, 1):.4f}", flush=True)

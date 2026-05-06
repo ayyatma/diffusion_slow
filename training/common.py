@@ -8,6 +8,7 @@ import torch
 import yaml
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
+from tqdm.auto import tqdm
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -125,6 +126,13 @@ def limited_batches(loader: Iterable, max_batches: int | None):
         if max_batches is not None and batch_idx >= max_batches:
             break
         yield batch
+
+
+def progress_batches(loader: Iterable, max_batches: int | None, desc: str):
+    total = len(loader)
+    if max_batches is not None:
+        total = min(total, max_batches)
+    return tqdm(limited_batches(loader, max_batches), total=total, desc=desc, leave=False)
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:

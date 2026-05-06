@@ -15,6 +15,7 @@ from training.common import (
     limited_batches,
     load_config,
     load_state_dict,
+    progress_batches,
     resolve_project_path,
 )
 
@@ -26,7 +27,8 @@ def calibrate_thresholds(model, val_loader, device, target_exit_rate=0.20, max_b
 
     with torch.no_grad():
         all_exit_logits = [[] for _ in range(5)]
-        for X, _ in limited_batches(val_loader, max_batches):
+        batches = progress_batches(val_loader, max_batches, desc="Calibrating thresholds")
+        for X, _ in batches:
             X = X.to(device)
             logits = model(X)
             for i in range(5):
@@ -62,7 +64,8 @@ def evaluate_accuracy(model, data_loader, device, max_batches=None):
     total = 0
 
     with torch.no_grad():
-        for X, y in limited_batches(data_loader, max_batches):
+        batches = progress_batches(data_loader, max_batches, desc="Evaluating clean accuracy")
+        for X, y in batches:
             X, y = X.to(device), y.to(device)
             logits = model(X)
             total += y.size(0)
@@ -70,6 +73,7 @@ def evaluate_accuracy(model, data_loader, device, max_batches=None):
             for i in range(6):
                 preds = logits[i].argmax(dim=1)
                 corrects[i] += (preds == y).sum().item()
+            batches.set_postfix(final_acc=f"{corrects[-1] / total * 100:.2f}%")
 
     if total == 0:
         raise ValueError("Cannot evaluate accuracy from an empty data loader")
